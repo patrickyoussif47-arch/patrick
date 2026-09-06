@@ -1,0 +1,10 @@
+/* style.css */
+html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+body{display:flex;align-items:center;justify-content:center;background:linear-gradient(#53a7ff,#1b6ed8);color:#fff}
+.container{text-align:center;padding:18px}
+canvas{display:block;margin:12px auto;background:linear-gradient(#8ed0ff,#5eb1ff);border:6px solid #2b4291;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,0.5)}
+.hud{display:flex;gap:18px;justify-content:center;font-weight:700;margin-bottom:6px}
+.controls{color:#edf6ff;font-size:14px;margin-top:8px}
+.buttons{margin-top:10px}
+button{margin:0 6px;padding:8px 12px;border-radius:6px;border:none;background:#ffcc00;color:#111;cursor:pointer;font-weight:700}
+button:hover{opacity:0.9}
