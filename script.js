@@ -1,266 +1,132 @@
-// script.js - simple platformer
+// script.js
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const scoreEl = document.getElementById('score');
-const livesEl = document.getElementById('lives');
+const playerScoreEl = document.getElementById('playerScore');
+const computerScoreEl = document.getElementById('computerScore');
 const restartBtn = document.getElementById('restart');
 
-const W = canvas.width, H = canvas.height;
-const GRAV = 0.6;
+const WIDTH = canvas.width;
+const HEIGHT = canvas.height;
 
-// Tile size
-const TS = 40;
+// Paddles
+const PADDLE_WIDTH = 12;
+const PADDLE_HEIGHT = 80;
+const PADDLE_SPEED = 6;
 
-// Level layout (0 empty, 1 ground, 2 coin, 3 enemy, 4 goal)
-const level = [
-  "000000000000000000000000000000000000000",
-  "000000000000000000000000000000000000000",
-  "000000000000000000000000000000000000000",
-  "000000000000000000002000000000000000000",
-  "000000000000000011111111000000000000000",
-  "000000000000000000000000000000000004000",
-  "000000000000000000000000000000001111110",
-  "000000000000020000000000000000000000000",
-  "111110000001111100000011111100000011111",
-  "000000000000000000000000000000000000000",
-  "111111111111111111111111111111111111111"
-];
+let player = { x: 10, y: HEIGHT/2 - PADDLE_HEIGHT/2, vy:0 };
+let computer = { x: WIDTH - PADDLE_WIDTH - 10, y: HEIGHT/2 - PADDLE_HEIGHT/2 };
 
-// Convert to numeric grid
-const grid = level.map(row => row.split('').map(c => parseInt(c)));
-const ROWS = grid.length;
-const COLS = grid[0].length;
+// Ball
+let ball = { x: WIDTH/2, y: HEIGHT/2, r:8, vx:4, vy:2 };
+let playerScore = 0;
+let computerScore = 0;
+let running = true;
 
-// Player
-let player = {
-  x: TS + 2,
-  y: H - TS * 3,
-  w: 28,
-  h: 36,
-  vx: 0,
-  vy: 0,
-  speed: 3.2,
-  jumpPower: 12,
-  onGround: false,
-  lives: 3
-};
-
-let score = 0;
-let cameraX = 0;
-let keys = {};
-let gameOver = false;
-let win = false;
-
-function tileAtPixel(x,y){
-  const col = Math.floor(x/TS);
-  const row = Math.floor(y/TS);
-  if(row<0 || row>=ROWS || col<0 || col>=COLS) return 0;
-  return grid[row][col];
+function resetBall(winner){
+  ball.x = WIDTH/2;
+  ball.y = HEIGHT/2;
+  // send ball towards loser (so winner serves)
+  const dir = winner === 'player' ? 1 : -1;
+  ball.vx = 4 * dir;
+  ball.vy = (Math.random() * 4 - 2);
+  // pause briefly
+  running = false;
+  setTimeout(()=> running = true, 700);
 }
 
-function setTile(col,row,val){
-  if(row<0||row>=ROWS||col<0||col>=COLS) return;
-  grid[row][col]=val;
+function drawRect(x,y,w,h,fill='#fff'){
+  ctx.fillStyle = fill;
+  ctx.fillRect(x,y,w,h);
 }
 
-function rectIntersects(a,b){
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+function drawCircle(x,y,r,fill='#fff'){
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fill();
 }
+
+function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
 
 function update(){
-  if(gameOver || win) return;
+  if(running){
+    // Move ball
+    ball.x += ball.vx;
+    ball.y += ball.vy;
 
-  // Input
-  if(keys['ArrowLeft'] || keys['a']) player.vx = -player.speed;
-  else if(keys['ArrowRight'] || keys['d']) player.vx = player.speed;
-  else player.vx = 0;
+    // Top/bottom collision
+    if(ball.y - ball.r <= 0){ ball.y = ball.r; ball.vy *= -1; }
+    if(ball.y + ball.r >= HEIGHT){ ball.y = HEIGHT - ball.r; ball.vy *= -1; }
 
-  // Apply gravity
-  player.vy += GRAV;
-
-  // Horizontal movement + collision
-  player.x += player.vx;
-  // check horizontal collisions with tiles
-  const left = Math.floor(player.x/TS);
-  const right = Math.floor((player.x + player.w)/TS);
-  const top = Math.floor(player.y/TS);
-  const bottom = Math.floor((player.y + player.h - 1)/TS);
-
-  for(let r=top;r<=bottom;r++){
-    for(let c=left;c<=right;c++){
-      const t = grid[r] && grid[r][c];
-      if(t === 1){
-        // collide
-        if(player.vx > 0){
-          player.x = c*TS - player.w; // push left
-        } else if(player.vx < 0){
-          player.x = c*TS + TS; // push right
-        }
-        player.vx = 0;
+    // Paddle collisions
+    // player
+    if(ball.x - ball.r <= player.x + PADDLE_WIDTH){
+      if(ball.y >= player.y && ball.y <= player.y + PADDLE_HEIGHT){
+        ball.x = player.x + PADDLE_WIDTH + ball.r; // prevent sticking
+        // reflect
+        const rel = (ball.y - (player.y + PADDLE_HEIGHT/2)) / (PADDLE_HEIGHT/2); // -1..1
+        const speed = Math.hypot(ball.vx, ball.vy) + 0.4; // slightly speed up
+        const angle = rel * (Math.PI/3); // max 60deg
+        ball.vx = Math.cos(angle) * speed; // to the right
+        ball.vy = Math.sin(angle) * speed;
+      } else if(ball.x - ball.r < 0){
+        // missed
+        computerScore++;
+        updateScore();
+        resetBall('computer');
       }
     }
-  }
 
-  // Vertical movement + collision
-  player.y += player.vy;
-  player.onGround = false;
-  const left2 = Math.floor(player.x/TS);
-  const right2 = Math.floor((player.x + player.w)/TS);
-  const top2 = Math.floor(player.y/TS);
-  const bottom2 = Math.floor((player.y + player.h - 1)/TS);
-
-  for(let r=top2;r<=bottom2;r++){
-    for(let c=left2;c<=right2;c++){
-      const t = grid[r] && grid[r][c];
-      if(t === 1){
-        if(player.vy > 0){
-          // landing on top
-          player.y = r*TS - player.h;
-          player.vy = 0;
-          player.onGround = true;
-        } else if(player.vy < 0){
-          player.y = r*TS + TS;
-          player.vy = 0;
-        }
-      }
-      if(t === 2){
-        // coin
-        // remove coin and increment score
-        setTile(c,r,0);
-        score++;
-      }
-      if(t === 3){
-        // enemy tile; simple damage when overlapping
-        // if player is falling onto enemy, defeat it
-        const tileRect = { x: c*TS, y: r*TS, w: TS, h: TS };
-        const playerRect = { x: player.x, y: player.y, w: player.w, h: player.h };
-        if(rectIntersects(playerRect, tileRect)){
-          if(player.vy > 2){
-            // stomp enemy
-            setTile(c,r,0);
-            player.vy = -8;
-            score += 2;
-          } else {
-            // take damage
-            hit();
-          }
-        }
-      }
-      if(t === 4){
-        // goal
-        win = true;
+    // computer
+    if(ball.x + ball.r >= computer.x){
+      if(ball.y >= computer.y && ball.y <= computer.y + PADDLE_HEIGHT){
+        ball.x = computer.x - ball.r;
+        const rel = (ball.y - (computer.y + PADDLE_HEIGHT/2)) / (PADDLE_HEIGHT/2);
+        const speed = Math.hypot(ball.vx, ball.vy) + 0.4;
+        const angle = rel * (Math.PI/3);
+        ball.vx = -Math.cos(angle) * speed; // to the left
+        ball.vy = Math.sin(angle) * speed;
+      } else if(ball.x + ball.r > WIDTH){
+        playerScore++;
+        updateScore();
+        resetBall('player');
       }
     }
+
+    // Move player by vy (from arrow keys)
+    player.y += player.vy;
+    player.y = clamp(player.y, 0, HEIGHT - PADDLE_HEIGHT);
+
+    // Simple AI for computer paddle: follow ball with limited speed
+    const targetY = ball.y - PADDLE_HEIGHT/2;
+    const diff = targetY - computer.y;
+    const aiSpeed = 4.0; // adjust difficulty
+    computer.y += clamp(diff, -aiSpeed, aiSpeed);
+    computer.y = clamp(computer.y, 0, HEIGHT - PADDLE_HEIGHT);
   }
-
-  // Jump
-  if((keys['ArrowUp']||keys['w']||keys[' ']) && player.onGround){
-    player.vy = -player.jumpPower;
-    player.onGround = false;
-  }
-
-  // Boundaries
-  if(player.y > H + 200){
-    // fell off
-    hit();
-  }
-
-  // camera follows player
-  cameraX = player.x - W/3;
-  cameraX = Math.max(0, Math.min(cameraX, COLS*TS - W));
-
-  // Update HUD
-  scoreEl.textContent = `Coins: ${score}`;
-  livesEl.textContent = `Lives: ${player.lives}`;
 }
 
-function hit(){
-  player.lives--;
-  if(player.lives <= 0){
-    gameOver = true;
-  } else {
-    // reset player position
-    player.x = TS + 2;
-    player.y = H - TS * 3;
-    player.vx = player.vy = 0;
-  }
+function updateScore(){
+  playerScoreEl.textContent = `Player: ${playerScore}`;
+  computerScoreEl.textContent = `Computer: ${computerScore}`;
 }
 
 function draw(){
   // clear
-  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0,0,WIDTH,HEIGHT);
 
-  // background
-  ctx.fillStyle = '#87ceeb';
-  ctx.fillRect(0,0,W,H);
-
-  // ground color
-  const startCol = Math.floor(cameraX/TS);
-  const endCol = Math.ceil((cameraX + W)/TS);
-
-  for(let r=0;r<ROWS;r++){
-    for(let c=startCol;c<endCol;c++){
-      const t = grid[r] && grid[r][c];
-      if(!t) continue;
-      const x = c*TS - cameraX;
-      const y = r*TS;
-      if(t === 1){
-        ctx.fillStyle = '#8d6e63';
-        ctx.fillRect(x, y, TS, TS);
-        // highlight
-        ctx.strokeStyle = '#5d4037';
-        ctx.strokeRect(x+1,y+1,TS-2,TS-2);
-      } else if(t === 2){
-        // coin
-        ctx.fillStyle = '#ffd54f';
-        ctx.beginPath();
-        ctx.arc(x+TS/2, y+TS/2, TS/4, 0, Math.PI*2);
-        ctx.fill();
-      } else if(t === 3){
-        // enemy (simple red square)
-        ctx.fillStyle = '#c62828';
-        ctx.fillRect(x+6,y+6,TS-12,TS-12);
-      } else if(t === 4){
-        // goal flag
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(x+TS/4, y+TS/4, TS/8, TS*3/4);
-        ctx.fillStyle = '#e53935';
-        ctx.beginPath();
-        ctx.moveTo(x+TS/4+TS/8,y+TS/4);
-        ctx.lineTo(x+TS/4+TS/8+14,y+TS/4+10);
-        ctx.lineTo(x+TS/4+TS/8,y+TS/4+20);
-        ctx.fill();
-      }
-    }
+  // center net
+  ctx.fillStyle = '#444';
+  const step = 20;
+  for(let y=0;y<HEIGHT;y+=step*2){
+    ctx.fillRect(WIDTH/2 - 1, y+step/2, 2, step);
   }
 
-  // draw player
-  ctx.fillStyle = '#1565c0';
-  ctx.fillRect(player.x - cameraX, player.y, player.w, player.h);
-  // eyes
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(player.x - cameraX + 6, player.y + 8, 6, 6);
-  ctx.fillRect(player.x - cameraX + 16, player.y + 8, 6, 6);
-
-  // HUD overlays for win/gameover
-  if(win){
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(0,0,W,H);
-    ctx.fillStyle = '#fff';
-    ctx.font = '36px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('You reached the goal! Well done!', W/2, H/2);
-  }
-  if(gameOver){
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(0,0,W,H);
-    ctx.fillStyle = '#fff';
-    ctx.font = '36px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('Game Over', W/2, H/2 - 20);
-    ctx.font = '20px Arial';
-    ctx.fillText('Press Restart to play again', W/2, H/2 + 20);
-  }
+  // paddles & ball
+  drawRect(player.x, player.y, PADDLE_WIDTH, PADDLE_HEIGHT);
+  drawRect(computer.x, computer.y, PADDLE_WIDTH, PADDLE_HEIGHT);
+  drawCircle(ball.x, ball.y, ball.r);
 }
 
 function loop(){
@@ -269,30 +135,28 @@ function loop(){
   requestAnimationFrame(loop);
 }
 
-// Input
-window.addEventListener('keydown', e => { keys[e.key] = true; });
-window.addEventListener('keyup', e => { keys[e.key] = false; });
-
-restartBtn.addEventListener('click', ()=>{
-  // reset state
-  player.x = TS + 2;
-  player.y = H - TS * 3;
-  player.vx = player.vy = 0;
-  player.lives = 3;
-  score = 0;
-  gameOver = false;
-  win = false;
-  // restore original grid coins/enemies/goal
-  // re-create grid from level description
-  for(let r=0;r<ROWS;r++){
-    for(let c=0;c<COLS;c++){
-      grid[r][c] = parseInt(level[r][c]);
-    }
-  }
+// Controls: mouse movement over canvas
+canvas.addEventListener('mousemove', (e)=>{
+  const rect = canvas.getBoundingClientRect();
+  const y = e.clientY - rect.top;
+  player.y = clamp(y - PADDLE_HEIGHT/2, 0, HEIGHT - PADDLE_HEIGHT);
 });
 
-// Initialize HUD
-scoreEl.textContent = `Coins: ${score}`;
-livesEl.textContent = `Lives: ${player.lives}`;
+// Arrow keys
+window.addEventListener('keydown', (e)=>{
+  if(e.key === 'ArrowUp') { player.vy = -PADDLE_SPEED; }
+  if(e.key === 'ArrowDown') { player.vy = PADDLE_SPEED; }
+});
+window.addEventListener('keyup', (e)=>{
+  if(e.key === 'ArrowUp' || e.key === 'ArrowDown') { player.vy = 0; }
+});
 
+restartBtn.addEventListener('click', ()=>{
+  playerScore = 0; computerScore = 0; updateScore(); resetBall();
+  running = true;
+});
+
+// Initialize
+updateScore();
+resetBall();
 requestAnimationFrame(loop);

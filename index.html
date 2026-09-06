@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Mini Platformer</title>
+  <title>Simple Pong</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="container">
-    <h1>Mini Platformer</h1>
-    <div class="hud">
-      <div id="score">Coins: 0</div>
-      <div id="lives">Lives: 3</div>
+    <h1>Simple Pong</h1>
+    <div class="scoreboard">
+      <div id="playerScore">Player: 0</div>
+      <div id="computerScore">Computer: 0</div>
     </div>
-    <canvas id="game" width="900" height="450"></canvas>
-    <div class="controls">Use Arrow keys or A/D to move, Up / W / Space to jump.</div>
+    <canvas id="game" width="800" height="500"></canvas>
+    <div class="controls">Use mouse or Up/Down arrows to move the left paddle.</div>
     <button id="restart">Restart</button>
   </div>
   <script src="script.js"></script>
